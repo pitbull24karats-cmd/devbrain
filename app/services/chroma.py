@@ -31,10 +31,24 @@ def query(
     n_results: int = 10,
     where: Optional[dict] = None,
 ) -> list[dict]:
-    kwargs: dict = {"query_embeddings": [vector], "n_results": n_results}
+    count = _collection.count()
+    if count == 0:
+        return []
+    kwargs: dict = {
+        "query_embeddings": [vector],
+        "n_results": min(n_results, count),
+    }
     if where:
         kwargs["where"] = where
-    res = _collection.query(**kwargs, include=["documents", "metadatas", "distances"])
+    try:
+        res = _collection.query(**kwargs, include=["documents", "metadatas", "distances"])
+    except Exception:
+        # where filter may be unsupported or collection too small; retry without filter
+        kwargs.pop("where", None)
+        try:
+            res = _collection.query(**kwargs, include=["documents", "metadatas", "distances"])
+        except Exception:
+            return []
     out = []
     for i, doc_id in enumerate(res["ids"][0]):
         meta = res["metadatas"][0][i]

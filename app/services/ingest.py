@@ -160,6 +160,7 @@ async def run_ingest(
                 texts = [c[1] for c in processed_chunks]
                 vectors = await embed_texts(texts)
                 metadatas = []
+                valid_mask: list[bool] = []
                 with get_conn() as conn:
                     for cid in ids:
                         row = conn.execute(
@@ -173,9 +174,16 @@ async def run_ingest(
                                 "project_id": row["project_id"] or "",
                                 "source_file": row["source_file"],
                             })
+                            valid_mask.append(True)
                         else:
-                            metadatas.append({})
-                chroma_svc.upsert(ids, vectors, texts, metadatas)
+                            # ChromaDB 0.5+ rejects empty metadata; skip this chunk
+                            valid_mask.append(False)
+                if not all(valid_mask):
+                    ids = [x for x, ok in zip(ids, valid_mask) if ok]
+                    texts = [x for x, ok in zip(texts, valid_mask) if ok]
+                    vectors = [x for x, ok in zip(vectors, valid_mask) if ok]
+                if ids:
+                    chroma_svc.upsert(ids, vectors, texts, metadatas)
                 with get_conn() as conn:
                     for cid in ids:
                         conn.execute(

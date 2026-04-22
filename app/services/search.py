@@ -59,38 +59,47 @@ async def hybrid_search(
     project_id: Optional[str] = None,
     exclude_types: Optional[List[str]] = None,
 ) -> List[SearchResult]:
+    # Normalize to lowercase to match stored values
+    if exclude_types:
+        exclude_types = [t.lower() for t in exclude_types]
+
     embed_query = await _translate_to_english(query)
     vector = await embed_text(embed_query)
     where = _build_chroma_where(project_id, exclude_types)
-    vector_hits = chroma_svc.query(vector, n_results=limit * 2, where=where)
+    # Request extra results to compensate for post-filtering by exclude_types
+    chroma_n = limit * 4 if exclude_types else limit * 2
+    vector_hits = chroma_svc.query(vector, n_results=chroma_n, where=where)
 
     keyword_scores: dict[str, float] = {}
-    with get_conn() as conn:
-        fts_q = f'"{query}"' if " " in query else query
-        type_filter = ""
-        type_params: list = []
-        if exclude_types:
-            placeholders = ",".join("?" * len(exclude_types))
-            type_filter = f"AND c.chunk_type NOT IN ({placeholders})"
-            type_params = list(exclude_types)
-        if project_id:
-            rows = conn.execute(
-                f"""SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
-                   FROM chunks_fts f
-                   JOIN chunks c ON c.id = f.id
-                   WHERE chunks_fts MATCH ? AND c.project_id = ? {type_filter}
-                   LIMIT ?""",
-                (fts_q, project_id, *type_params, limit * 2),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                f"""SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
-                   FROM chunks_fts f
-                   JOIN chunks c ON c.id = f.id
-                   WHERE chunks_fts MATCH ? {type_filter}
-                   LIMIT ?""",
-                (fts_q, *type_params, limit * 2),
-            ).fetchall()
+    try:
+        with get_conn() as conn:
+            fts_q = f'"{query}"' if " " in query else query
+            type_filter = ""
+            type_params: list = []
+            if exclude_types:
+                placeholders = ",".join("?" * len(exclude_types))
+                type_filter = f"AND c.chunk_type NOT IN ({placeholders})"
+                type_params = list(exclude_types)
+            if project_id:
+                rows = conn.execute(
+                    f"""SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
+                       FROM chunks_fts f
+                       JOIN chunks c ON c.id = f.id
+                       WHERE chunks_fts MATCH ? AND c.project_id = ? {type_filter}
+                       LIMIT ?""",
+                    (fts_q, project_id, *type_params, limit * 4),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"""SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
+                       FROM chunks_fts f
+                       JOIN chunks c ON c.id = f.id
+                       WHERE chunks_fts MATCH ? {type_filter}
+                       LIMIT ?""",
+                    (fts_q, *type_params, limit * 4),
+                ).fetchall()
+    except Exception:
+        rows = []
     for rank, row in enumerate(rows):
         keyword_scores[row["id"]] = 1.0 - rank / max(len(rows), 1)
 
