@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Optional
+import httpx
 
 from app.core.config import settings
 from app.core.db import get_conn
@@ -9,13 +10,38 @@ from app.models.schemas import SearchResult
 
 TYPE_PRIORITY = {"reusable": 4, "insight": 3, "summary": 2, "raw": 1}
 
+_TRANSLATE_PROMPT = (
+    "Translate the following query to English for semantic search. "
+    "Return only the translated text:\n{query}"
+)
+
+
+async def _translate_to_english(query: str) -> str:
+    try:
+        async with httpx.AsyncClient(
+            base_url=settings.ollama_base_url, timeout=30.0
+        ) as client:
+            resp = await client.post(
+                "/api/generate",
+                json={
+                    "model": settings.llm_model,
+                    "prompt": _TRANSLATE_PROMPT.format(query=query),
+                    "stream": False,
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()["response"].strip()
+    except Exception:
+        return query
+
 
 async def hybrid_search(
     query: str,
     limit: int = 10,
     project_id: Optional[str] = None,
 ) -> List[SearchResult]:
-    vector = await embed_text(query)
+    embed_query = await _translate_to_english(query)
+    vector = await embed_text(embed_query)
     where = {"project_id": project_id} if project_id else None
     vector_hits = chroma_svc.query(vector, n_results=limit * 2, where=where)
 
