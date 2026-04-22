@@ -1,32 +1,35 @@
 from __future__ import annotations
+import asyncio
 import httpx
-from pathlib import Path
 from app.core.config import settings
 
-_client = httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=300.0)
+# Share the same semaphore as embed to serialize all Ollama calls
+from app.services.embed import _ollama_sem
 
 _SUMMARIZE_PROMPT = (settings.prompts_dir / "summarize.txt").read_text(encoding="utf-8")
 _ABSTRACT_PROMPT = (settings.prompts_dir / "abstract.txt").read_text(encoding="utf-8")
 
 
 async def _generate(prompt: str) -> str:
-    resp = await _client.post(
-        "/api/generate",
-        json={"model": settings.llm_model, "prompt": prompt, "stream": False},
-    )
-    resp.raise_for_status()
-    return resp.json()["response"].strip()
+    async with _ollama_sem:
+        async with httpx.AsyncClient(
+            base_url=settings.ollama_base_url, timeout=1800.0
+        ) as client:
+            resp = await client.post(
+                "/api/generate",
+                json={"model": settings.llm_model, "prompt": prompt, "stream": False},
+            )
+            resp.raise_for_status()
+            return resp.json()["response"].strip()
 
 
 async def summarize_content(content: str, content_type: str = "file") -> dict:
-    """Return {summary, insights, reusable} strings."""
     prompt = _SUMMARIZE_PROMPT.format(content_type=content_type, content=content)
     raw = await _generate(prompt)
     return _parse_sections(raw)
 
 
 async def abstract_summary(summary: str) -> dict:
-    """Level2 abstraction → return {abstract, reusable}."""
     prompt = _ABSTRACT_PROMPT.format(summary=summary)
     raw = await _generate(prompt)
     return _parse_sections(raw)

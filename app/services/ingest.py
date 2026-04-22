@@ -90,7 +90,7 @@ async def run_ingest(
 
             raw_chunks = _chunk_text(text)
 
-            summaries = await summarize_content(text[:8000], content_type)
+            summaries = await summarize_content(text[:3000], content_type)
 
             processed_chunks = []
 

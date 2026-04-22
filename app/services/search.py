@@ -22,14 +22,24 @@ async def hybrid_search(
     keyword_scores: dict[str, float] = {}
     with get_conn() as conn:
         fts_q = f'"{query}"' if " " in query else query
-        rows = conn.execute(
-            """SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
-               FROM chunks_fts f
-               JOIN chunks c ON c.id = f.id
-               WHERE chunks_fts MATCH ?
-               LIMIT ?""",
-            (fts_q, limit * 2),
-        ).fetchall()
+        if project_id:
+            rows = conn.execute(
+                """SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
+                   FROM chunks_fts f
+                   JOIN chunks c ON c.id = f.id
+                   WHERE chunks_fts MATCH ? AND c.project_id = ?
+                   LIMIT ?""",
+                (fts_q, project_id, limit * 2),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT c.id, c.chunk_type, c.level, c.content, c.project_id, c.source_file
+                   FROM chunks_fts f
+                   JOIN chunks c ON c.id = f.id
+                   WHERE chunks_fts MATCH ?
+                   LIMIT ?""",
+                (fts_q, limit * 2),
+            ).fetchall()
     for rank, row in enumerate(rows):
         keyword_scores[row["id"]] = 1.0 - rank / max(len(rows), 1)
 
