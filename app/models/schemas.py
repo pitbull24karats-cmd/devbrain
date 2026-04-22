@@ -21,6 +21,7 @@ class SearchRequest(BaseModel):
     mode: Literal["hybrid", "vector", "keyword"] = "hybrid"
     limit: int = Field(default=10, ge=1, le=100)
     project_id: Optional[str] = None
+    exclude_types: Optional[List[str]] = None
 
 
 class SearchResult(BaseModel):
