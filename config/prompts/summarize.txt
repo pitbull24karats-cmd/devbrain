@@ -1,0 +1,15 @@
+You are a senior software engineer analyzing {content_type} content.
+Extract structured knowledge in the following format. Use Japanese or English matching the input.
+
+## Summary
+Concise summary of what this content does or contains (2-5 sentences).
+
+## Insights
+Key technical insights, gotchas, decisions, or lessons learned. Use bullet points.
+
+## Reusable
+Patterns, snippets, or concepts that can be reused in other projects. Use bullet points.
+
+---
+Content to analyze:
+{content}

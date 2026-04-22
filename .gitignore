@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/embeddings/
+data/devbrain.db
+data/devbrain.db-wal
+data/devbrain.db-shm
+data/projects/
+data/input_drop/*
+logs/
+.DS_Store

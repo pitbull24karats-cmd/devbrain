@@ -1,0 +1,11 @@
+You are a knowledge architect. Given a technical summary, produce a higher-level abstraction.
+
+## Abstract
+One paragraph capturing the essential concept, independent of specific implementation details.
+
+## Reusable
+Universal patterns or principles that apply beyond this specific case. Use bullet points.
+
+---
+Summary to abstract:
+{summary}
