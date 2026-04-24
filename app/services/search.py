@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Optional
+import asyncio
 import httpx
 
 from app.core.config import settings
@@ -19,7 +20,7 @@ _TRANSLATE_PROMPT = (
 async def _translate_to_english(query: str) -> str:
     try:
         async with httpx.AsyncClient(
-            base_url=settings.ollama_base_url, timeout=30.0
+            base_url=settings.ollama_base_url, timeout=5.0
         ) as client:
             resp = await client.post(
                 "/api/generate",
@@ -53,13 +54,12 @@ def _build_chroma_where(
     return {"$and": conditions}
 
 
-async def hybrid_search(
+async def _hybrid_search_impl(
     query: str,
-    limit: int = 10,
-    project_id: Optional[str] = None,
-    exclude_types: Optional[List[str]] = None,
+    limit: int,
+    project_id: Optional[str],
+    exclude_types: Optional[List[str]],
 ) -> List[SearchResult]:
-    # Normalize to lowercase to match stored values
     if exclude_types:
         exclude_types = [t.lower() for t in exclude_types]
 
@@ -156,3 +156,18 @@ async def hybrid_search(
         results = [r for r in results if r.chunk_type not in exclude_types]
     results.sort(key=lambda r: r.score, reverse=True)
     return results[:limit]
+
+
+async def hybrid_search(
+    query: str,
+    limit: int = 10,
+    project_id: Optional[str] = None,
+    exclude_types: Optional[List[str]] = None,
+) -> List[SearchResult]:
+    try:
+        return await asyncio.wait_for(
+            _hybrid_search_impl(query, limit, project_id, exclude_types),
+            timeout=15.0,
+        )
+    except asyncio.TimeoutError:
+        return []
